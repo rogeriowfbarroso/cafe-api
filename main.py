@@ -4,100 +4,106 @@ from pydantic import BaseModel
 import pandas as pd
 import joblib
 
-# 1. INICIALIZA A API
+# 1. INICIALIZAÇÃO DA API
 app = FastAPI(title="API de Predição de Café - Tese de Doutorado")
 
-# 2. CONFIGURAÇÃO DE CORS (Permite que seu site acesse a API)
+# 2. CONFIGURAÇÃO DE CORS (Permite que a sua interface Web acesse a API)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://rogeriowfbarroso.github.io/agroclima/"],  # Na produção, você pode trocar "*" pelo link do seu site
+    allow_origins=["https://rogeriowfbarroso.github.io/agroclima/"],  # * Aceita requisições de qualquer site
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 3. CARREGAMENTO DOS MODELOS (Executa uma vez quando a API liga)
-print("Carregando modelo de Inteligência Artificial...")
+# 3. CARREGAMENTO DOS ARQUIVOS DO MODELO
+print("A iniciar o carregamento do modelo de Inteligência Artificial...")
 try:
     modelo_rf = joblib.load('modelo_random_forest_cafe.pkl')
     colunas_corretas = joblib.load('colunas_do_modelo.pkl')
-    # scaler = joblib.load('padronizador_dados.pkl') # Se usar SVM/MLP no futuro
     print("Modelo carregado com sucesso!")
 except Exception as e:
-    print(f"Erro ao carregar arquivos .pkl: {e}")
+    print(f"Erro Crítico ao carregar arquivos .pkl: {e}")
 
-# 4. DEFINIÇÃO DA ESTRUTURA DE ENTRADA (O que o Front-end vai enviar)
-# O Pydantic garante que a API só aceite os dados se vierem no formato correto
+# 4. ESTRUTURA DE DADOS ESPERADA DO FRONT-END (Validação Pydantic)
+# Aqui estão todas as variáveis exatas que o seu .pkl exige.
 class DadosRequisicao(BaseModel):
-    # Clima (listas de 12 meses)
-    t2m: list[float]          # Lista com 12 valores (Janeiro a Dezembro)
-    tmax: list[float]         # Lista com 12 valores
-    tmin: list[float]         # Lista com 12 valores
-    rh2m: list[float]         # Lista com 12 valores
-    prectotcorr: list[float]  # Lista com 12 valores
-    ps: list[float]           # NOVO: Pressão
-    ws10m: list[float]
+    # Clima (listas de 12 meses, de Janeiro a Dezembro)
+    t2m: list[float]          
+    tmax: list[float]         
+    tmin: list[float]         
+    rh2m: list[float]         
+    prectotcorr: list[float]  
+    ps: list[float]           # Pressão Superficial
+    ws10m: list[float]        # Velocidade do Vento a 10m
     
-    # Solo (valores únicos)
+    # Solo (valores únicos por coordenada)
     Argila: float             
     Nitrogenio: float         
     OCD: float               
     OCS: float               
     PH: float                
-    SOC: float       
-    
-# 5. ROTA DE PREVISÃO (Onde a mágica acontece)
+    SOC: float               
+
+# 5. ROTA PRINCIPAL: PREVISÃO
 @app.post("/prever")
 def fazer_previsao(dados: DadosRequisicao):
     try:
-        # A. Converte os dados recebidos para um dicionário Python
         dados_recebidos = dados.dict()
         
-        # B. Separa o que é clima (listas mensais) do que é solo (valores únicos)
+        # Variáveis climáticas que precisam ser desdobradas em 12 meses
         variaveis_clima = ['t2m', 'tmax', 'tmin', 'rh2m', 'prectotcorr', 'ps', 'ws10m']
         meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
         
         dados_para_o_modelo = {}
         
-        # C. Monta as colunas climáticas (Ex: tmax_Janeiro)
+        # Mapeando dinamicamente o clima (Ex: tmax_Janeiro, tmax_Fevereiro...)
         for var in variaveis_clima:
             valores_mensais = dados_recebidos[var]
+            
+            # Trava de segurança: garantir que o Front-end enviou exatamente 12 meses
             if len(valores_mensais) != 12:
-                raise HTTPException(status_code=400, detail=f"A variável {var} precisa ter exatamente 12 meses.")
+                raise HTTPException(status_code=400, detail=f"A variável {var} precisa ter exatamente 12 valores.")
             
             for i, mes in enumerate(meses):
                 nome_coluna = f"{var}_{mes}"
                 dados_para_o_modelo[nome_coluna] = valores_mensais[i]
                 
-        # D. Adiciona as colunas de solo
-        dados_para_o_modelo['ph_solo'] = dados_recebidos['ph_solo']
-        dados_para_o_modelo['argila_solo'] = dados_recebidos['argila_solo']
-        dados_para_o_modelo['argila_solo'] = dados_recebidos['argila_solo']
-        dados_para_o_modelo['Nitrogenio_solo'] = dados_recebidos['Nitrogenio_solo']
-        dados_para_o_modelo['OCD_solo'] = dados_recebidos['OCD_solo']
-        dados_para_o_modelo['OCS_solo'] = dados_recebidos['OCS_solo']
-        dados_para_o_modelo['SOC_solo'] = dados_recebidos['SOC_solo']
-
-        # E. Converte para Pandas e alinha as colunas com as do treinamento
+        # Inserindo diretamente os dados de Solo (Nomes exatos do seu .pkl)
+        dados_para_o_modelo['Argila'] = dados_recebidos['Argila']
+        dados_para_o_modelo['Nitrogenio'] = dados_recebidos['Nitrogenio']
+        dados_para_o_modelo['OCD'] = dados_recebidos['OCD']
+        dados_para_o_modelo['OCS'] = dados_recebidos['OCS']
+        dados_para_o_modelo['PH'] = dados_recebidos['PH']
+        dados_para_o_modelo['SOC'] = dados_recebidos['SOC']
+        
+        # Converte para Pandas
         df_novo = pd.DataFrame([dados_para_o_modelo])
+        
+        # REINDEX: O Segredo de Ouro. Garante que as colunas fiquem na ordem exata do treinamento
         df_novo = df_novo.reindex(columns=colunas_corretas, fill_value=0)
         
-        # F. Faz a predição!
+        # Executa a previsão usando o Random Forest
         previsao = modelo_rf.predict(df_novo)[0]
         
-        # G. Retorna o resultado para o Front-end em formato JSON
+        # Retorna o resultado JSON para o Front-end
         return {
             "status": "sucesso",
             "produtividade_estimada_kg_ha": round(previsao, 2),
-            "mensagem": "Predição realizada com base em Inteligência Artificial."
+            "mensagem": "Predição realizada com sucesso pelo modelo Random Forest."
         }
 
     except Exception as e:
-        # Se algo der errado, avisa o Front-end
+        # Se algo falhar na construção dos dados, avisa a interface
         raise HTTPException(status_code=500, detail=str(e))
 
-# 6. ROTA DE TESTE (Para ver se a API está online no Render)
+# 6. ROTA DE STATUS (Para testar se o Render está no ar)
 @app.get("/")
 def raiz():
-    return {"status": "Online", "projeto": "Predição de Café - API"}
+    return {
+        "status": "Online", 
+        "projeto": "Sistema Integrado de Suporte à Decisão - Café Arábica",
+        "autor": "Rogério W F Barroso - Tese de Doutorado em Agricultura Sustentável",
+        "mensagem": "Bem-vindo à API de Predição de Café! Use a rota /prever para obter estimativas de produtividade."
+    }
