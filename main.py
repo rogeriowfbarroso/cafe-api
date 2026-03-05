@@ -68,7 +68,12 @@ def fazer_previsao(dados: DadosRequisicao):
         # D. Adiciona as colunas de solo
         dados_para_o_modelo['ph_solo'] = dados_recebidos['ph_solo']
         dados_para_o_modelo['argila_solo'] = dados_recebidos['argila_solo']
-        
+        dados_para_o_modelo['argila_solo'] = dados_recebidos['argila_solo']
+        dados_para_o_modelo['Nitrogenio_solo'] = dados_recebidos['Nitrogenio_solo']
+        dados_para_o_modelo['OCD_solo'] = dados_recebidos['OCD_solo']
+        dados_para_o_modelo['OCS_solo'] = dados_recebidos['OCS_solo']
+        dados_para_o_modelo['SOC_solo'] = dados_recebidos['SOC_solo']
+
         # E. Converte para Pandas e alinha as colunas com as do treinamento
         df_novo = pd.DataFrame([dados_para_o_modelo])
         df_novo = df_novo.reindex(columns=colunas_corretas, fill_value=0)
