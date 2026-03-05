@@ -29,17 +29,22 @@ except Exception as e:
 # 4. DEFINIÇÃO DA ESTRUTURA DE ENTRADA (O que o Front-end vai enviar)
 # O Pydantic garante que a API só aceite os dados se vierem no formato correto
 class DadosRequisicao(BaseModel):
+    # Clima (listas de 12 meses)
     t2m: list[float]          # Lista com 12 valores (Janeiro a Dezembro)
     tmax: list[float]         # Lista com 12 valores
     tmin: list[float]         # Lista com 12 valores
     rh2m: list[float]         # Lista com 12 valores
     prectotcorr: list[float]  # Lista com 12 valores
-    ph_solo: float            # Valor único
-    argila_solo: float        # Valor único
-    Nitrogenio_solo: float    # Valor único
-    OCD_solo: float           # Valor único
-    OCS_solo: float           # Valor único
-    SOC_solo: float           # Valor único
+    ps: list[float]           # NOVO: Pressão
+    ws10m: list[float]
+    
+    # Solo (valores únicos)
+    Argila: float             
+    Nitrogenio: float         
+    OCD: float               
+    OCS: float               
+    PH: float                
+    SOC: float       
     
 # 5. ROTA DE PREVISÃO (Onde a mágica acontece)
 @app.post("/prever")
@@ -49,7 +54,7 @@ def fazer_previsao(dados: DadosRequisicao):
         dados_recebidos = dados.dict()
         
         # B. Separa o que é clima (listas mensais) do que é solo (valores únicos)
-        variaveis_clima = ['t2m', 'tmax', 'tmin', 'rh2m', 'prectotcorr']
+        variaveis_clima = ['t2m', 'tmax', 'tmin', 'rh2m', 'prectotcorr', 'ps', 'ws10m']
         meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
         
