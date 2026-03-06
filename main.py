@@ -10,7 +10,7 @@ app = FastAPI(title="API de Predição de Café - Tese de Doutorado")
 # 2. CONFIGURAÇÃO DE CORS (Permite que a sua interface Web acesse a API)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://rogeriowfbarroso.github.io/agroclima/"],  # * Aceita requisições de qualquer site
+    allow_origins=["*"],  # * Aceita requisições de qualquer site
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
